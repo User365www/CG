@@ -1,6 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='.')
 
 def clamp(val, min_val, max_val):
     return max(min_val, min(val, max_val))
