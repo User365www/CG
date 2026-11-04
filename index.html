@@ -59,41 +59,52 @@
 </div>
 
 <script>
-    // Вся клиентская логика сведена в одну простую функцию отправки на Python
+    // Универсальная функция отправки на Python
     async function send(model, param, val) {
-        // Синхронизируем связанный ползунок и поле ввода
+        // Синхронизируем ползунок и числовое поле текущего параметра
         document.getElementById(param + '_r').value = val;
         document.getElementById(param + '_n').value = val;
 
-        // Собираем значения измененной модели
+        // Вспомогательная функция: считывает число, а если поле пустое — возвращает 0
+        const getVal = (id) => {
+            const v = document.getElementById(id + '_n').value;
+            return v === '' ? 0 : parseFloat(v);
+        };
+
+        // Собираем значения измененной модели без пустых строк
         let values = [];
-        if (model === 'cmyk') values = ['c', 'm', 'y', 'k'].map(k => document.getElementById(k + '_n').value);
-        if (model === 'rgb')  values = ['r', 'g', 'b'].map(k => document.getElementById(k + '_n').value);
-        if (model === 'hsv')  values = ['h', 's', 'v'].map(k => document.getElementById(k + '_n').value);
+        if (model === 'cmyk') values = ['c', 'm', 'y', 'k'].map(getVal);
+        if (model === 'rgb')  values = ['r', 'g', 'b'].map(getVal);
+        if (model === 'hsv')  values = ['h', 's', 'v'].map(getVal);
 
-        // Отправляем запрос на сервер Python
-        let res = await fetch('/convert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: model, values: values })
-        });
-        let data = await res.json();
+        try {
+            let res = await fetch('/convert', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: model, values: values })
+            });
 
-        // Обновляем все значения в интерфейсе
-        const setUI = (keys, arr) => keys.forEach((k, i) => {
-            document.getElementById(k + '_r').value = arr[i];
-            document.getElementById(k + '_n').value = arr[i];
-        });
+            if (!res.ok) return;
+            let data = await res.json();
 
-        if (model !== 'cmyk') setUI(['c', 'm', 'y', 'k'], data.cmyk);
-        if (model !== 'rgb')  setUI(['r', 'g', 'b'], data.rgb);
-        if (model !== 'hsv')  setUI(['h', 's', 'v'], data.hsv);
+            // Обновляем значения во всех моделях
+            const setUI = (keys, arr) => keys.forEach((k, i) => {
+                document.getElementById(k + '_r').value = arr[i];
+                document.getElementById(k + '_n').value = arr[i];
+            });
 
-        // Обновляем плашку предпросмотра
-        let hex = "#" + data.rgb.map(x => x.toString(16).padStart(2, '0')).join('');
-        document.getElementById('preview').style.backgroundColor = hex;
-        document.getElementById('hexLabel').innerText = hex.toUpperCase();
-        document.getElementById('picker').value = hex;
+            if (model !== 'cmyk') setUI(['c', 'm', 'y', 'k'], data.cmyk);
+            if (model !== 'rgb')  setUI(['r', 'g', 'b'], data.rgb);
+            if (model !== 'hsv')  setUI(['h', 's', 'v'], data.hsv);
+
+            // Обновляем индикатор цвета
+            let hex = "#" + data.rgb.map(x => x.toString(16).padStart(2, '0')).join('');
+            document.getElementById('preview').style.backgroundColor = hex;
+            document.getElementById('hexLabel').innerText = hex.toUpperCase();
+            document.getElementById('picker').value = hex;
+        } catch (e) {
+            console.error("Ошибка при конвертации:", e);
+        }
     }
 
     // Обработка выбора из системной палитры
@@ -101,14 +112,20 @@
         let r = parseInt(hex.slice(1, 3), 16),
             g = parseInt(hex.slice(3, 5), 16),
             b = parseInt(hex.slice(5, 7), 16);
+
         document.getElementById('r_n').value = r;
         document.getElementById('g_n').value = g;
         document.getElementById('b_n').value = b;
         send('rgb', 'r', r);
     }
 
-    // Запуск при открытии (стартовый красный цвет)
-    window.onload = () => send('rgb', 'r', 255);
+    // Инициализация при загрузке: задаем чистый красный цвет (R=255, G=0, B=0)
+    window.onload = () => {
+        document.getElementById('r_n').value = 255;
+        document.getElementById('g_n').value = 0;
+        document.getElementById('b_n').value = 0;
+        send('rgb', 'r', 255);
+    };
 </script>
 
 </body>
