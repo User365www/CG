@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Лабораторная 2. Вариант 10</title>
+</head>
+<body>
+    <h1>Лабораторная работа №2, вариант 10</h1>
+    <p>Глобальная пороговая обработка и нелинейные фильтры</p>
+
+    <form method="post" enctype="multipart/form-data">
+        <p>
+            Тестовое изображение:
+            <select name="sample">
+                {% for name in samples %}
+                    <option value="{{ name }}" {% if name == sample %}selected{% endif %}>{{ name }}</option>
+                {% endfor %}
+            </select>
+        </p>
+        <p>Или загрузить своё: <input type="file" name="image" accept="image/png,image/jpeg"></p>
+        <p>
+            Размер окна фильтра:
+            <select name="size">
+                <option value="3" {% if size == 3 %}selected{% endif %}>3 × 3</option>
+                <option value="5" {% if size == 5 %}selected{% endif %}>5 × 5</option>
+            </select>
+        </p>
+        <button type="submit" name="mode" value="threshold">Сравнить 2 пороговых метода</button>
+        <button type="submit" name="mode" value="filters">Применить нелинейные фильтры</button>
+    </form>
+
+    {% if error %}<p>{{ error }}</p>{% endif %}
+
+    {% if results %}
+        <hr>
+        {% for title, picture in results %}
+            <div style="display:inline-block;vertical-align:top;margin:10px;max-width:320px">
+                <h3>{{ title }}</h3>
+                <img src="data:image/png;base64,{{ picture }}" alt="{{ title }}"
+                     style="max-width:100%;height:auto;border:1px solid #aaa">
+            </div>
+        {% endfor %}
+    {% endif %}
+</body>
+</html>
