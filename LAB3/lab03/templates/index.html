@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Лабораторная работа 3 — растровые алгоритмы</title>
+<style>
+body { font-family: Arial, sans-serif; margin: 20px; color:#222; background:#fff; }
+h2 { font-size:20px; font-weight:normal; margin-top:0; }
+.layout { display:flex; gap:20px; align-items:flex-start; }
+.controls { width:270px; flex-shrink:0; }
+label { display:block; margin:10px 0 4px; }
+input, select, button { font:inherit; padding:6px; }
+input { width:90px; box-sizing:border-box; }
+button { margin:12px 6px 0 0; cursor:pointer; }
+canvas { border:1px solid #888; width:100%; height:650px; }
+.plot { flex:1; min-width:350px; }
+.note { font-size:13px; color:#555; line-height:1.4; }
+#status { margin-top:10px; padding:7px; border:1px solid #ccc; min-height:20px; }
+#timing { margin-top:14px; border-collapse:collapse; width:100%; }
+#timing td, #timing th { border:1px solid #aaa; padding:6px; text-align:left; }
+@media(max-width:800px){.layout{display:block}.controls{width:auto}.plot{margin-top:15px}}
+</style>
+</head>
+<body>
+<h2>Лабораторная работа №3. Базовые растровые алгоритмы</h2>
+<div class="layout">
+<section class="controls">
+<label for="algorithm">Алгоритм</label>
+<select id="algorithm">
+<option value="step">Пошаговый алгоритм</option>
+<option value="dda">ЦДА (DDA)</option>
+<option value="bresenham">Брезенхем (отрезок)</option>
+<option value="circle">Брезенхем (окружность)</option>
+</select>
+<label>X0 / центр X</label><input id="x0" type="number" value="2" step="1">
+<label>Y0 / центр Y</label><input id="y0" type="number" value="2" step="1">
+<div id="lineFields">
+<label>X1</label><input id="x1" type="number" value="12" step="1">
+<label>Y1</label><input id="y1" type="number" value="7" step="1">
+</div>
+<div id="circleFields" hidden>
+<label>Радиус R</label><input id="r" type="number" value="8" min="0" step="1">
+</div>
+<label>Масштаб (экранных пикселей на единицу)</label>
+<input id="scale" type="number" value="24" min="10" max="60" step="2">
+<br>
+<button id="draw">Построить</button>
+<button id="clear">Очистить</button>
+<button id="measure">Измерить время</button>
+<div id="status">Введите координаты и нажмите «Построить».</div>
+<p class="note">Целые координаты соответствуют узлам дискретной сетки. Синие квадраты — пиксели результата; пунктиром показана идеальная геометрическая фигура.</p>
+<div id="timingBox"></div>
+</section>
+<section class="plot"><canvas id="canvas" width="900" height="650"></canvas></section>
+</div>
+<script>
+const canvas=document.getElementById('canvas'), ctx=canvas.getContext('2d');
+let points=[], ideal=null;
+const $=id=>document.getElementById(id);
+function updateFields(){
+ const circle=$('algorithm').value==='circle';
+ $('lineFields').hidden=circle; $('circleFields').hidden=!circle;
+}
+$('algorithm').addEventListener('change',updateFields);
+function number(id){ const v=Number($(id).value); if(!Number.isInteger(v)) throw new Error('Все координаты должны быть целыми числами.'); return v; }
+function transform(x,y,s){ return [canvas.width/2+x*s,canvas.height/2-y*s]; }
+function render(){
+ const s=Math.max(10,Math.min(60,Number($('scale').value)||24));
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);
+ const cx=canvas.width/2,cy=canvas.height/2;
+ ctx.strokeStyle='#e5e5e5';ctx.lineWidth=1;
+ for(let x=Math.ceil(-cx/s);x<=Math.floor(cx/s);x++){
+  let px=cx+x*s;ctx.beginPath();ctx.moveTo(px,0);ctx.lineTo(px,canvas.height);ctx.stroke();
+  if(x!==0){ctx.fillStyle='#555';ctx.font='11px Arial';ctx.fillText(x,px+2,cy+13);}
+ }
+ for(let y=Math.ceil(-cy/s);y<=Math.floor(cy/s);y++){
+  let py=cy-y*s;ctx.beginPath();ctx.moveTo(0,py);ctx.lineTo(canvas.width,py);ctx.stroke();
+  if(y!==0){ctx.fillStyle='#555';ctx.font='11px Arial';ctx.fillText(y,cx+5,py-3);}
+ }
+ ctx.strokeStyle='#333';ctx.lineWidth=2;
+ ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(canvas.width-8,cy);ctx.moveTo(canvas.width-8,cy);ctx.lineTo(canvas.width-16,cy-5);ctx.moveTo(canvas.width-8,cy);ctx.lineTo(canvas.width-16,cy+5);ctx.stroke();
+ ctx.beginPath();ctx.moveTo(cx,canvas.height);ctx.lineTo(cx,8);ctx.stroke();
+ ctx.fillStyle='#222';ctx.font='bold 13px Arial';ctx.fillText('X',canvas.width-18,cy-10);ctx.fillText('Y',cx+10,15);ctx.fillText('0',cx-14,cy+14);
+ if(ideal){
+  ctx.save();ctx.strokeStyle='#888';ctx.setLineDash([5,4]);ctx.lineWidth=1.5;ctx.beginPath();
+  if(ideal.type==='line'){let a=transform(ideal.x0,ideal.y0,s),b=transform(ideal.x1,ideal.y1,s);ctx.moveTo(...a);ctx.lineTo(...b);}
+  else {let c=transform(ideal.cx,ideal.cy,s);ctx.arc(c[0],c[1],ideal.r*s,0,Math.PI*2);}
+  ctx.stroke();ctx.restore();
+ }
+ ctx.fillStyle='#2864b4';ctx.strokeStyle='#17447f';
+ const size=Math.max(3,Math.min(8,s*.27));
+ for(const [x,y] of points){let p=transform(x,y,s);ctx.fillRect(p[0]-size/2,p[1]-size/2,size,size);}
+ if(ideal){
+  if(ideal.type==='line'){
+   for(const [x,y,color] of [[ideal.x0,ideal.y0,'#c43d32'],[ideal.x1,ideal.y1,'#238443']]){
+    let p=transform(x,y,s);ctx.fillStyle=color;ctx.beginPath();ctx.arc(p[0],p[1],5,0,Math.PI*2);ctx.fill();
+   }
+  }else{let p=transform(ideal.cx,ideal.cy,s);ctx.fillStyle='#c43d32';ctx.fillRect(p[0]-5,p[1]-1,10,2);ctx.fillRect(p[0]-1,p[1]-5,2,10);}
+ }
+}
+$('draw').onclick=async()=>{
+ try{
+  const algorithm=$('algorithm').value;
+  const data={algorithm,x0:number('x0'),y0:number('y0')};
+  if(algorithm==='circle') data.r=number('r');
+  else {data.x1=number('x1');data.y1=number('y1');}
+  const response=await fetch('/draw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const result=await response.json();if(!response.ok)throw new Error(result.error||'Ошибка обработки');
+  points=result.points;ideal=result.ideal;render();
+  $('status').textContent=`Построено точек: ${result.count}. Координаты пикселей — целочисленные узлы сетки.`;
+ }catch(e){$('status').textContent=e.message;}
+};
+$('clear').onclick=()=>{points=[];ideal=null;render();$('status').textContent='Поле очищено.';};
+$('measure').onclick=async()=>{
+ try{
+  const r=await fetch('/timing');const data=await r.json();
+  let html='<h3>Время выполнения (среднее за 100 повторений)</h3><table id="timing"><tr><th>Алгоритм</th><th>Точек</th><th>Время, мкс</th></tr>';
+  for(const v of data.results)html+=`<tr><td>${v.name}</td><td>${v.points}</td><td>${v.microseconds}</td></tr>`;
+  $('timingBox').innerHTML=html+'</table>';
+ }catch(e){$('status').textContent='Не удалось измерить время: '+e.message;}
+};
+$('scale').addEventListener('change',render);
+window.addEventListener('resize',render);
+updateFields();render();
+</script>
+</body>
+</html>
